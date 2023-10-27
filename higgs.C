@@ -32,9 +32,6 @@ for (int i=1;i<497; ++i){
     else if (i==100) append ="";
     string filename = "h029_230114/background/mc21a.aMCPy8EG_aa_FxFx_2j_myy_90_175.MxAODDetailed.e8481_s3873_r13829_p5512.h029."+append+std::to_string(i)+".root"; 
  
-
-
-
     TFile* file = new TFile(filename.c_str());;
     TString rootFileName = filename;
     if (!file || file->IsZombie()) {
@@ -81,10 +78,26 @@ for (int i=1;i<497; ++i){
     file->Close();
     }
 
-TCanvas *c = new TCanvas("c","Invariant Mass Distribution (Sidebands)",800,600);
-h_mSidebands->Draw();
-c->SaveAs("InvariantMassDistribution.png");
+RooRealVar mgg("mgg","mgg",105,160);
+//Construct a background pdf with RooExponential
+RooRealVar slope("slope","slope",-0.02,-5.0,0.0);
+RooExponential background_pdf("bkg_pdf","bkg_pdf",mgg,slope);
+RooDataHist data("data", "data", mgg, Import(*h_mSidebands));
+mgg.setRange("low",105,120);
+mgg.setRange("high",130,160);
 
-  
+background_pdf.fitTo(data,RooFit::Range("low,high"),RooFit::Save());
+
+
+TCanvas *c = new TCanvas("c","Invariant Mass Distribution (Sidebands)",800,600);
+RooPlot* frame = mgg.frame();
+data.plotOn(frame);
+background_pdf.plotOn(frame);
+frame->Draw();
+c->SaveAs("InvariantMassFit.png");
+
+TCanvas *c1 = new TCanvas("c1","Invariant Mass Distribution (Sidebands)",800,600);
+h_mSidebands->Draw();
+c1->SaveAs("InvariantMassDistribution.png");  
 }
 
