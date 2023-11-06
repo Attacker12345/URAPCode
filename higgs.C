@@ -23,7 +23,8 @@ string append;
 float y1_pt, y2_pt = 0;
 float y1_eta,y2_eta = 0;
 float y1_phi,y2_phi = 0;
-float weight = 0;
+float weight,cross = 0;
+UInt_t chnum = 0;
 Char_t ispassed = 0;
 
 double myy;
@@ -47,7 +48,10 @@ tree->SetBranchAddress("y1_phi",&y1_phi);
 tree->SetBranchAddress("y2_phi",&y2_phi);
 tree->SetBranchAddress("HGamEventInfoAuxDyn.isPassed",&ispassed);
 tree->SetBranchAddress("HGamEventInfoAuxDyn.weight",&weight);
+tree->SetBranchAddress("HGamEventInfoAuxDyn.crossSectionBRfilterEff",&cross);
+tree->SetBranchAddress("EventInfoAuxDyn.mcChannelNumber",&chnum);
 TLorentzVector photon1,photon2;
+float weight_normalized;
      //Iterating over all entries in the Ttree
      for(int j=0;j<tree->GetEntries();++j){
              tree->GetEntry(j);
@@ -57,6 +61,7 @@ TLorentzVector photon1,photon2;
                    photon1.SetPtEtaPhiM(y1_pt,y1_eta,y1_phi,0);
                    photon2.SetPtEtaPhiM(y2_pt,y2_eta,y2_phi,0);
                    myy = (photon1+photon2).M()/1000;
+                   weight_normalized = 31400*cross*weight/chnum;
                //Filling Signal or Sideband histogram depending on if invariant mass is within signal region
                if(myy>120 and myy<130) h_mSignal->Fill(myy,weight);
                else h_mSidebands->Fill(myy,weight);
