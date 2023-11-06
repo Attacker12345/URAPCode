@@ -97,8 +97,8 @@ cout << mgg.getMin() << " " << mgg.getMax() << endl;
 //double scaleFactor = background_pdf.getNormObj()->getVal();
 for (int i = 0; i < h_m->GetNbinsX(); ++i) {
         mgg.setVal(h_m->GetBinCenter(i+1));
-        dataValue = h_m->GetBinContent(i+1)/scaleFactor;
-        fittedValue = background_pdf.getVal();
+        dataValue = h_m->GetBinContent(i+1);
+        fittedValue = background_pdf.getVal()*scaleFactor;
        // fittedValue = extended_pdf.getVal()*scaleFactor;
         residual = dataValue - fittedValue;
        // cout << dataValue << " " << fittedValue << endl;
