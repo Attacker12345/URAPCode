@@ -21,14 +21,14 @@ vector <double> sum_weights = {357737100,95504710000,123287100,7593420,115394,18
 double myy;
 //Defining two histograms, One for the Signal and one for the Sidebands, can be added together later
 TH1D *h_mSignal = new TH1D("h_Signal","h_Signal",100,105,160);
-TH1D *h_mSidebands = new TH1D("h_Sidebands","h_Sidebandsl",100,105,160);
+TH1D *h_mBackground = new TH1D("h_Background","h_Background",100,105,160);
 
 void higgs(){
 
-TChain *tree = new TChain("output");
-tree->Add("h029_230114/background/mc21a.aMCPy8EG_aa_FxFx_2j_myy_90_175.MxAODDetailed.e8481_s3873_r13829_p5512.h029.*.root");
-tree->Add("h029_230114/signal/*.root");
-
+for(int a=0;a<2;++a){
+TChain *tree = new TChain("output");	
+if(a<1) tree->Add("h029_230114/background/mc21a.aMCPy8EG_aa_FxFx_2j_myy_90_175.MxAODDetailed.e8481_s3873_r13829_p5512.h029.*.root");
+else tree->Add("h029_230114/signal/*.root");
 
      //Setting Brnach Adresses 
 tree->SetBranchAddress("y1_pt",&y1_pt);
@@ -67,22 +67,21 @@ int index;
                      }
                    weight_normalized = 31400*cross*weight/sum_weights[index];
                //Filling Signal or Sideband histogram depending on if invariant mass is within signal region
-               if(myy>120 and myy<130) h_mSignal->Fill(myy,weight_normalized);
-               else h_mSidebands->Fill(myy,weight_normalized);
+               if(a<1) h_mBackground->Fill(myy,weight_normalized);
+               else h_mSignal->Fill(myy,weight_normalized);
         }
      }
+delete tree;
+}
+
 TCanvas *c1 = new TCanvas("c1","Invariant Mass Distribution (Sidebands)",800,600);
-h_mSidebands->Draw();
-c1->SaveAs("InvariantMassDistribution.png");
+h_mBackground->Draw();
+c1->SaveAs("BackgrounDistribution.png");
 
-TCanvas *c2 = new TCanvas("c2","Invariant Mass Distribution (Sig)",800,600);
-h_mSignal->Draw();
-c2->SaveAs("InvariantMassDistributionTEST.png");
-
-
-TFile *file = new TFile("invariantMassDistribution.root", "RECREATE");
-h_mSidebands->Write();
+TFile *file = new TFile("Background.root", "RECREATE");
+h_mBackground->Write();
+TFile *file1 = new TFile("Signal.root", "RECREATE");
 h_mSignal->Write();
-file->Close();
+file1->Close();
 }
 

@@ -21,15 +21,15 @@ using namespace RooFit ;
 
 void higgsFit(){
 
-TFile *file = new TFile("invariantMassDistribution.root","READ");
-
+TFile *file = new TFile("Background.root","READ");
+TFile *file1 = new TFile("Signal.root","READ");
 //Getting Histograms from ROOT file
-TH1D *h_mSidebands = (TH1D*)file->Get("h_Sidebands");
-TH1D *h_mSignal = (TH1D*)file->Get("h_Signal");
+TH1D *h_mBackground = (TH1D*)file->Get("h_Background");
+TH1D *h_mSignal = (TH1D*)file1->Get("h_Signal");
 
 //Obtaining Complete Invariant Mass Histogram
 TH1D *h_m = new TH1D("h_m","h_m",100,105,160);
-h_m->Add(h_mSidebands);
+h_m->Add(h_mBackground);
 h_m->Add(h_mSignal);
 
 //Performing a fit using RooBernstein to the sideband histogram, getting background fit
