@@ -15,6 +15,7 @@
 #include "TAxis.h"
 #include "TH1.h"
 #include "Rtypes.h"
+#include "TLegend.h"
 using namespace RooFit ;
 
 
@@ -49,13 +50,14 @@ mgg.setRange("low",105,120);
 mgg.setRange("high",130,160);
 mgg.setRange("total",105,160);
 background_pdf.fitTo(data,RooFit::Range("low,high"),RooFit::Save());
-//setting the polynomial coefficients so as they're not adjusted later
 
+//setting the polynomial coefficients so as they're not adjusted later
 coef1.setConstant(true);
 coef2.setConstant(true);
 coef3.setConstant(true);
 coef4.setConstant(true);
 background_pdf.fitTo(data,RooFit::Range("total"),RooFit::Save());
+
 //cout << coef1.getVal() << endl;
 //cout << coef2.getVal() << endl;
 //cout << coef3.getVal() << endl;
@@ -78,75 +80,75 @@ RooRealVar Ns("Ns", "Number of signal events", upperlim/100, 0, upperlim);
 RooAddPdf model("model", "Extended PDF", RooArgList(signal_pdf, background_pdf), RooArgList(Ns, Nb));
 model.fitTo(data,RooFit::Range("total"),RooFit::Save());
 
-//cout << Ns.getVal() << endl;
-//cout << Nb.getVal() << endl;
-//cout << sigma.getVal() << endl;
-
 RooExtendPdf extended_pdf("extendedPdf", "Extended PDF with normalization", model, Ns);
+
 //Computing Residuals
 
-//RooRealVar x("x","Bin Centers",130,105,160);
 double dataValue,fittedValue,residual;
 TH1D *h_residual = new TH1D("h_residuals","h_residuals",100,105,160);
-//RooArgSet obs(mgg);
-double scaleFactor = h_m->Integral()*h_m->GetBinWidth(1) / background_pdf.createIntegral(mgg,RooFit::Range(""))->getVal();
-cout << endl<<endl<<background_pdf.createIntegral(mgg,RooFit::Range(""))->getVal() << endl << endl;
-cout << mgg.getMin() << " " << mgg.getMax() << endl;
-//RooPlot* frame2 = mgg.frame();
-//data.plotOn(frame2);
-//double scaleFactor = background_pdf.getNormObj()->getVal();
+double scaleFactor = h_m->Integral() / background_pdf.createIntegral(mgg,RooFit::Range(""))->getVal();
+float width = h_m->GetBinWidth(1);
+float center;
 for (int i = 0; i < h_m->GetNbinsX(); ++i) {
-        mgg.setVal(h_m->GetBinCenter(i+1));
+        center = h_m->GetBinCenter(i+1);
+        mgg.setRange("bin",center-width/2,center+width/2);
         dataValue = h_m->GetBinContent(i+1);
-        fittedValue = background_pdf.getVal()*scaleFactor;
-       // fittedValue = extended_pdf.getVal()*scaleFactor;
+        fittedValue = background_pdf.createIntegral(mgg,RooFit::Range("bin"))->getVal()*scaleFactor;
         residual = dataValue - fittedValue;
        // cout << dataValue << " " << fittedValue << endl;
+        //FIX ERRORS ON THIS
         h_residual->SetBinContent(i+1, residual);
-        h_residual->SetBinError(i+1,0);
+        h_residual->SetBinError(i+1,h_m->GetBinError(i+1));
     }
 
-RooDataHist data_residual("data", "data", mgg, Import(*h_residual),RooFit::DataError(RooAbsData::SumW2));
-TCanvas *c3 = new TCanvas("c3","Invariant Mass Distribution",800,600);
-RooPlot *frame2 = mgg.frame(Title(""));
-data.plotOn(frame2, RooFit::SumW2Error(false));
-background_pdf.plotOn(frame2);
-frame2->Draw();
-c3->SaveAs("Test.png");
-
-//RooHist *hresid1 = frame2->residHist();
-//RooDataHist hresid("dataHist", "Data from RooHist", mgg, Import(*hresid1));
-//Drawing Complete Invariant Mass Distribution
-
-//TCanvas *c2 = new TCanvas("c2","Residuals",800,600);
-//hresid->Draw();
-//c2->SaveAs("ResidualsTEST.png");
-
+RooDataHist data_residual("data", "data", mgg, Import(*h_residual));
 
 //Plotting the invariant mass histogram and curve fit for the background data
 
-TCanvas *c = new TCanvas("c","Invariant Mass Distribution",800,600);
-c->Divide(1, 2);
+double signalScale = Ns.getVal();
 
+TCanvas *c = new TCanvas("c","Invariant Mass Distribution",800,600);
+c->Divide(1, 2,0,0);
 
 c->cd(1);
 RooPlot* frame = mgg.frame();
-data.plotOn(frame);
-extended_pdf.plotOn(frame);
-frame->GetXaxis()->SetTitle("Diphoton Invariant Mass (GeV)");
-frame->GetYaxis()->SetTitle("Number of Events");
+signal_pdf.plotOn(frame,RooFit::Name("Signal PDF"),RooFit::Normalization(signalScale,RooAbsReal::NumEvent),RooFit::LineColor(kRed));
+data.plotOn(frame,RooFit::Name("data"));
+extended_pdf.plotOn(frame,RooFit::Name("Total PDF"));
+background_pdf.plotOn(frame,RooFit::Name("Background PDF"),RooFit::LineStyle(kDotted), RooFit::LineColor(kBlack));
+frame->GetXaxis()->SetTitle("");
+frame->GetYaxis()->SetTitle("Events / GeV");
+frame->SetTitle("Diphoton Invariant Mass Distribution");
+frame->SetTitleSize(0.1, "t");
 frame->Draw();
+TLegend* legend = new TLegend(0.65, 0.75, 0.85, 0.85);
+legend->AddEntry("data", "Data", "l");
+legend->AddEntry("Total PDF", "Total PDF", "l");
+legend->AddEntry("Signal PDF", "Signal PDF", "l");
+legend->AddEntry("Background PDF", "Background PDF", "l");
+legend->SetBorderSize(0);
+legend->SetFillStyle(0);
+legend->SetX1(0.65); // Adjust as needed
+legend->SetY1(0.6); // Adjust as needed
+legend->SetX2(0.95); // Adjust as needed
+legend->SetY2(0.9);
+//legend->SetTextSize(0.1);
+legend->Draw();
 
 c->cd(2);
+
+RooPlot* frame1 = mgg.frame();
+//data_residual.plotOn(frame1,RooFit::DataError(RooAbsData::None));
+data_residual.plotOn(frame1);
 mgg.setRange("signal1",120,130);
 signal_pdf.fitTo(data_residual,RooFit::Range("signal1"),RooFit::Save());
-RooPlot* frame1 = mgg.frame();
-data_residual.plotOn(frame1);
 signal_pdf.plotOn(frame1,RooFit::Range("total"));
+frame1->GetXaxis()->SetTitle("m_{#gamma#gamma} (GeV)");
+frame1->GetYaxis()->SetTitle("Data - Background");
+frame1->SetTitle("");
 frame1->Draw();
 
 c->Update();
 c->SaveAs("InvariantMassFit.png");
 
 }
-
