@@ -6,7 +6,6 @@
 #include "TAxis.h"
 #include "TH1.h"
 #include <TChain.h>
-using namespace RooFit ;
 
 //Declaring Variables that will be used as Ttree address holders
 float y1_pt, y2_pt = 0;
