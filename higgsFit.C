@@ -16,11 +16,15 @@
 #include "TH1.h"
 #include "Rtypes.h"
 #include "TLegend.h"
+#include "RooWorkspace.h"
+#include "RooCrystalBall.h"
 using namespace RooFit ;
 
 
 void higgsFit(){
+RooRealVar mgg("mgg","mgg",105,160);
 
+//Obtaining Binned Data
 TFile *file = new TFile("Background.root","READ");
 TFile *file1 = new TFile("Signal.root","READ");
 //Getting Histograms from ROOT file
@@ -31,62 +35,81 @@ TH1D *h_mSignal = (TH1D*)file1->Get("h_Signal");
 TH1D *h_m = new TH1D("h_m","h_m",100,105,160);
 h_m->Add(h_mBackground);
 h_m->Add(h_mSignal);
-
-//Performing a fit using RooBernstein to the sideband histogram, getting background fit
-
-RooRealVar mgg("mgg","mgg",105,160);
-
-RooRealVar coef1("coef1", "Coefficient 1", 0.5, 0, 1);
-RooRealVar coef2("coef2", "Coefficient 2", 0.3, 0, 0.5);
-RooRealVar coef3("coef3", "Coefficient 3", 0.1, 0, 0.5);
-RooRealVar coef4("coef4", "Coefficient 4", 0.05, 0, 0.2);
-RooArgList coefList(coef1, coef2, coef3, coef4);
-RooBernstein background_pdf("bernstein", "Bernstein polynomial", mgg, coefList);
-
 RooDataHist data("data", "data", mgg, Import(*h_m));
+
+//Obtaining Unbinned Data
+/*
+TFile *file = new TFile("BackgroundData.root","READ");
+TFile *file1 = new TFile("SignalData.root","READ");
+RooWorkspace *workspace = (RooWorkspace*)file->Get("workspace");
+RooWorkspace *workspace1 = (RooWorkspace*)file1->Get("workspace");
+
+RooDataSet *data_background = (RooDataSet*)workspace->data("Background Data");
+RooDataSet *data_signal = (RooDataSet*)workspace1->data("Signal Data");
+
+RooDataSet *data = new RooDataSet("Data", "Data", mgg);
+data->append(*data_background);
+data->append(*data_signal);
+*/
+
+
+
+//Defining Background PDF as Bernstein Polynomial
+RooRealVar coef0("coef0", "Coefficient 0", 0.5, -100, 100);
+RooRealVar coef1("coef1", "Coefficient 1", 0.5, -100, 100);
+RooRealVar coef2("coef2", "Coefficient 2", 0.3, -100, 100);
+RooRealVar coef3("coef3", "Coefficient 3", 0.1, -100, 100);
+RooRealVar coef4("coef4", "Coefficient 4", 0.05, -100, 100);
+RooArgList coefList(coef0,coef1, coef2, coef3, coef4);
+RooBernstein background_pdf("bernstein", "Bernstein polynomial", mgg, coefList);
 
 //Only fitting data to the sideband regions
 mgg.setRange("low",105,120);
 mgg.setRange("high",130,160);
 mgg.setRange("total",105,160);
-background_pdf.fitTo(data,RooFit::Range("low,high"),RooFit::Save());
+//background_pdf.fitTo(*data,RooFit::Range("low,high"),RooFit::Save());
 
-//setting the polynomial coefficients so as they're not adjusted later
-coef1.setConstant(true);
-coef2.setConstant(true);
-coef3.setConstant(true);
-coef4.setConstant(true);
-background_pdf.fitTo(data,RooFit::Range("total"),RooFit::Save());
+//coef0.setConstant(true);
+//coef1.setConstant(true);
+//coef2.setConstant(true);
+//coef3.setConstant(true);
+//coef4.setConstant(true);
 
-//cout << coef1.getVal() << endl;
-//cout << coef2.getVal() << endl;
-//cout << coef3.getVal() << endl;
-//cout << coef4.getVal() << endl;
+//Getting Parameters from the saved CrystalBallFit
+TFile *params_file = new TFile("CrystalBallParameters.root","READ");
+RooWorkspace *params_workspace = (RooWorkspace*)params_file->Get("ggH");
+RooArgSet parameters = params_workspace->allVars();
 
+RooRealVar* avg_mgg = dynamic_cast<RooRealVar*>(parameters.find("avg_mgg"));
+RooRealVar* sigmaL = dynamic_cast<RooRealVar*>(parameters.find("sigmaL"));
+RooRealVar* sigmaR = dynamic_cast<RooRealVar*>(parameters.find("sigmaR"));
+RooRealVar* alphaL = dynamic_cast<RooRealVar*>(parameters.find("alphaL"));
+RooRealVar* alphaR = dynamic_cast<RooRealVar*>(parameters.find("alphaR"));
+RooRealVar* nL = dynamic_cast<RooRealVar*>(parameters.find("nL")); 
+RooRealVar* nR = dynamic_cast<RooRealVar*>(parameters.find("nR"));	
+RooCrystalBall signal_pdf("CrystalBall", "Crystal Ball Fit", mgg,*avg_mgg, *sigmaL, *sigmaR, *alphaL, *nL, *alphaR, *nR);
 
-//Defining the Guassian Signal PDF
-
-RooRealVar mean("mean", "mean of Gaussian", 125, 120, 130);
-RooRealVar sigma("sigma", "width of Gaussian", 1.5, 0.3, 3);
-RooGaussian signal_pdf("gaussian", "Gaussian PDF", mgg, mean, sigma);
-
-mean.setConstant(true);
-sigma.setConstant(true);
+avg_mgg->setConstant(true);
+sigmaL->setConstant(true);
+sigmaR->setConstant(true);
+alphaL->setConstant(true);
+alphaR->setConstant(true);
+nL->setConstant(true);
+nR->setConstant(true);
 
 //Fitting to an Extended PDF with Background + Signal Gaussian
 float upperlim =  h_m->Integral();
+//float upperlim = data->sumEntries();
 RooRealVar Nb("Nb", "Number of background events", upperlim/100, 0, upperlim);
 RooRealVar Ns("Ns", "Number of signal events", upperlim/100, 0, upperlim);
 RooAddPdf model("model", "Extended PDF", RooArgList(signal_pdf, background_pdf), RooArgList(Ns, Nb));
 model.fitTo(data,RooFit::Range("total"),RooFit::Save());
-
 RooExtendPdf extended_pdf("extendedPdf", "Extended PDF with normalization", model, Ns);
 
 //Computing Residuals
-
 double dataValue,fittedValue,residual;
 TH1D *h_residual = new TH1D("h_residuals","h_residuals",100,105,160);
-double scaleFactor = h_m->Integral() / background_pdf.createIntegral(mgg,RooFit::Range(""))->getVal();
+double scaleFactor = Nb.getVal() / background_pdf.createIntegral(mgg,RooFit::Range(""))->getVal();
 float width = h_m->GetBinWidth(1);
 float center;
 for (int i = 0; i < h_m->GetNbinsX(); ++i) {
@@ -95,8 +118,7 @@ for (int i = 0; i < h_m->GetNbinsX(); ++i) {
         dataValue = h_m->GetBinContent(i+1);
         fittedValue = background_pdf.createIntegral(mgg,RooFit::Range("bin"))->getVal()*scaleFactor;
         residual = dataValue - fittedValue;
-       // cout << dataValue << " " << fittedValue << endl;
-        //FIX ERRORS ON THIS
+       // cout << dataValue << " " << fittedValue << endl;`
         h_residual->SetBinContent(i+1, residual);
         h_residual->SetBinError(i+1,h_m->GetBinError(i+1));
     }
@@ -122,33 +144,42 @@ frame->SetTitle("Diphoton Invariant Mass Distribution");
 frame->SetTitleSize(0.1, "t");
 frame->Draw();
 TLegend* legend = new TLegend(0.65, 0.75, 0.85, 0.85);
-legend->AddEntry("data", "Data", "l");
+legend->AddEntry("data", "Data", "P");
 legend->AddEntry("Total PDF", "Total PDF", "l");
 legend->AddEntry("Signal PDF", "Signal PDF", "l");
 legend->AddEntry("Background PDF", "Background PDF", "l");
 legend->SetBorderSize(0);
 legend->SetFillStyle(0);
-legend->SetX1(0.65); // Adjust as needed
-legend->SetY1(0.6); // Adjust as needed
-legend->SetX2(0.95); // Adjust as needed
+legend->SetX1(0.65);
+legend->SetY1(0.6); 
+legend->SetX2(0.95); 
 legend->SetY2(0.9);
-//legend->SetTextSize(0.1);
 legend->Draw();
 
 c->cd(2);
-
 RooPlot* frame1 = mgg.frame();
 //data_residual.plotOn(frame1,RooFit::DataError(RooAbsData::None));
-data_residual.plotOn(frame1);
+data_residual.plotOn(frame1,RooFit::Name("Residuals"));
 mgg.setRange("signal1",120,130);
-signal_pdf.fitTo(data_residual,RooFit::Range("signal1"),RooFit::Save());
-signal_pdf.plotOn(frame1,RooFit::Range("total"));
+signal_pdf.plotOn(frame1,RooFit::Range("total"),RooFit::Normalization(signalScale,RooAbsReal::NumEvent),RooFit::Name("Signal PDF"),RooFit::LineColor(kAzure));
 frame1->GetXaxis()->SetTitle("m_{#gamma#gamma} (GeV)");
 frame1->GetYaxis()->SetTitle("Data - Background");
 frame1->SetTitle("");
 frame1->Draw();
+TLegend* legend1 = new TLegend(0.65, 0.75, 0.85, 0.85);
+legend1->AddEntry("Residuals", "Residuals", "P");
+legend1->AddEntry("Signal PDF", "Signal PDF", "l");
+legend1->SetBorderSize(0);
+legend1->SetFillStyle(0);
+legend1->SetX1(0.8); 
+legend1->SetY1(0.75); 
+legend1->SetX2(0.95); 
+legend1->SetY2(0.9);
+legend1->Draw();
 
 c->Update();
 c->SaveAs("InvariantMassFit.png");
+file->Close();
+file1->Close();
 
 }
