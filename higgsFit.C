@@ -18,6 +18,7 @@
 #include "TLegend.h"
 #include "RooWorkspace.h"
 #include "RooCrystalBall.h"
+#include "RooFitResult.h"
 using namespace RooFit ;
 
 
@@ -32,11 +33,12 @@ TH1D *h_mBackground = (TH1D*)file->Get("h_Background");
 TH1D *h_mSignal = (TH1D*)file1->Get("h_Signal");
 
 //Obtaining Complete Invariant Mass Histogram
-TH1D *h_m = new TH1D("h_m","h_m",100,105,160);
+TH1D *h_m = new TH1D("h_m","h_m",1100,105,160);
 h_m->Add(h_mBackground);
 h_m->Add(h_mSignal);
 RooDataHist data("data", "data", mgg, Import(*h_m));
-
+TH1D *h_mRebin = (TH1D*)h_m->Rebin(11,"Histogram Rebinned");
+RooDataHist dataRebin("data", "data", mgg, Import(*h_mRebin));
 //Obtaining Unbinned Data
 /*
 TFile *file = new TFile("BackgroundData.root","READ");
@@ -51,8 +53,6 @@ RooDataSet *data = new RooDataSet("Data", "Data", mgg);
 data->append(*data_background);
 data->append(*data_signal);
 */
-
-
 
 //Defining Background PDF as Bernstein Polynomial
 RooRealVar coef0("coef0", "Coefficient 0", 0.5, -100, 100);
@@ -97,19 +97,48 @@ alphaR->setConstant(true);
 nL->setConstant(true);
 nR->setConstant(true);
 
+//Defining Gaussian Signal Fit
+RooRealVar mean("mean","mean of gaussian signal model",125,120,130);
+RooRealVar sigma("sigma","standard deviation of gaussian signal model",1.5,0.01,10);
+//mean.setConstant(true);
+sigma.setConstant(true);
+RooGaussian signal_pdf_gauss("Guassian Signal Fit","Guassian Signal Fit",mgg,mean,sigma);
+
 //Fitting to an Extended PDF with Background + Signal Gaussian
 float upperlim =  h_m->Integral();
-//float upperlim = data->sumEntries();
 RooRealVar Nb("Nb", "Number of background events", upperlim/100, 0, upperlim);
 RooRealVar Ns("Ns", "Number of signal events", upperlim/100, 0, upperlim);
 RooAddPdf model("model", "Extended PDF", RooArgList(signal_pdf, background_pdf), RooArgList(Ns, Nb));
-model.fitTo(data,RooFit::Range("total"),RooFit::Save());
+RooFitResult *result = model.fitTo(data,RooFit::Range("total"),RooFit::Save());
 RooExtendPdf extended_pdf("extendedPdf", "Extended PDF with normalization", model, Ns);
 
+//Doing Same Fit For Guassian Signal
+RooRealVar coef01("coef01", "Coefficient 0", 0.5, -100, 100);
+RooRealVar coef11("coef11", "Coefficient 1", 0.5, -100, 100);
+RooRealVar coef21("coef21", "Coefficient 2", 0.3, -100, 100);
+RooRealVar coef31("coef31", "Coefficient 3", 0.1, -100, 100);
+RooRealVar coef41("coef41", "Coefficient 4", 0.05, -100, 100);
+RooArgList coefList1(coef01,coef11, coef21, coef31, coef41);
+RooBernstein background_pdf1("bernstein1", "Bernstein polynomial", mgg, coefList1);
+coef01.setConstant(true);
+
+RooRealVar Nb1("Nb", "Number of background events", upperlim/100, 0, upperlim);
+RooRealVar Ns1("Ns", "Number of signal events", upperlim/100, 0, upperlim);
+RooAddPdf model1("model", "Extended PDF", RooArgList(signal_pdf_gauss, background_pdf1), RooArgList(Ns1, Nb1));
+RooFitResult *result1 = model1.fitTo(data,RooFit::Range("total"),RooFit::Save());
+RooExtendPdf extended_pdf1("extendedPdf_gauss", "Extended PDF with guassian signal with normalization", model1, Ns1);
+
+cout << "Minimum Log Likelihood (Double-Sided Crystal Ball): " << result->minNll() << endl;
+cout << "Minimum Log Likelihood (Gaussian): " << result1->minNll() << endl;
+cout << "Ns Value(DCB): " << Ns.getVal() << " +- " << Ns.getError() << endl;
+cout << "Ns Value(Gaussian): " << Ns1.getVal() << " +- " << Ns1.getError() << endl;
+
 //Computing Residuals
-double dataValue,fittedValue,residual;
-TH1D *h_residual = new TH1D("h_residuals","h_residuals",100,105,160);
+double dataValue,fittedValue,residual,fittedValue1,residual1;
+TH1D *h_residual = new TH1D("h_residuals","h_residuals",1100,105,160);
+TH1D *h_residual1 = new TH1D("h_residuals1","h_residuals1",1100,105,160);
 double scaleFactor = Nb.getVal() / background_pdf.createIntegral(mgg,RooFit::Range(""))->getVal();
+double scaleFactor1 = Nb1.getVal() / background_pdf1.createIntegral(mgg,RooFit::Range(""))->getVal();
 float width = h_m->GetBinWidth(1);
 float center;
 for (int i = 0; i < h_m->GetNbinsX(); ++i) {
@@ -118,35 +147,48 @@ for (int i = 0; i < h_m->GetNbinsX(); ++i) {
         dataValue = h_m->GetBinContent(i+1);
         fittedValue = background_pdf.createIntegral(mgg,RooFit::Range("bin"))->getVal()*scaleFactor;
         residual = dataValue - fittedValue;
+
+	fittedValue1 = background_pdf1.createIntegral(mgg,RooFit::Range("bin"))->getVal()*scaleFactor1;
+	residual1 = dataValue - fittedValue1;
        // cout << dataValue << " " << fittedValue << endl;`
         h_residual->SetBinContent(i+1, residual);
         h_residual->SetBinError(i+1,h_m->GetBinError(i+1));
-    }
 
-RooDataHist data_residual("data", "data", mgg, Import(*h_residual));
+	h_residual1->SetBinContent(i+1, residual1);
+        h_residual1->SetBinError(i+1,h_m->GetBinError(i+1));
+    }
+TH1D *h_residualRebin =  (TH1D*)h_residual->Rebin(11,"residualshistogram");
+TH1D *h_residualRebin1 =  (TH1D*)h_residual1->Rebin(11,"residualshistogram");
+
+RooDataHist data_residual("data", "data", mgg, Import(*h_residualRebin));
+RooDataHist data_residual1("data", "data", mgg, Import(*h_residualRebin1));
 
 //Plotting the invariant mass histogram and curve fit for the background data
 
 double signalScale = Ns.getVal();
+double signalScale1 = Ns1.getVal();
 
 TCanvas *c = new TCanvas("c","Invariant Mass Distribution",800,600);
 c->Divide(1, 2,0,0);
 
 c->cd(1);
 RooPlot* frame = mgg.frame();
-signal_pdf.plotOn(frame,RooFit::Name("Signal PDF"),RooFit::Normalization(signalScale,RooAbsReal::NumEvent),RooFit::LineColor(kRed));
-data.plotOn(frame,RooFit::Name("data"));
+signal_pdf.plotOn(frame,RooFit::Name("Signal PDF (Double-Sided Crystal Ball)"),RooFit::Normalization(signalScale,RooAbsReal::NumEvent),RooFit::LineColor(kAzure+6));
+signal_pdf_gauss.plotOn(frame,RooFit::Name("Signal PDF (Gaussian)"),RooFit::Normalization(signalScale1,RooAbsReal::NumEvent),RooFit::LineColor(kOrange-3));
+dataRebin.plotOn(frame,RooFit::Name("data"));
 extended_pdf.plotOn(frame,RooFit::Name("Total PDF"));
 background_pdf.plotOn(frame,RooFit::Name("Background PDF"),RooFit::LineStyle(kDotted), RooFit::LineColor(kBlack));
 frame->GetXaxis()->SetTitle("");
 frame->GetYaxis()->SetTitle("Events / GeV");
+frame->GetYaxis()->SetTitleSize(0.05);
 frame->SetTitle("Diphoton Invariant Mass Distribution");
 frame->SetTitleSize(0.1, "t");
 frame->Draw();
 TLegend* legend = new TLegend(0.65, 0.75, 0.85, 0.85);
 legend->AddEntry("data", "Data", "P");
 legend->AddEntry("Total PDF", "Total PDF", "l");
-legend->AddEntry("Signal PDF", "Signal PDF", "l");
+legend->AddEntry("Signal PDF (Double-Sided Crystal Ball)", "Signal PDF (Double-Sided Crystal Ball)", "l");
+legend->AddEntry("Signal PDF (Gaussian)", "Signal PDF (Gaussian)", "l");
 legend->AddEntry("Background PDF", "Background PDF", "l");
 legend->SetBorderSize(0);
 legend->SetFillStyle(0);
@@ -160,20 +202,30 @@ c->cd(2);
 RooPlot* frame1 = mgg.frame();
 //data_residual.plotOn(frame1,RooFit::DataError(RooAbsData::None));
 data_residual.plotOn(frame1,RooFit::Name("Residuals"));
+data_residual1.plotOn(frame1,RooFit::Name("Residuals1"),RooFit::LineColor(kGray+2),RooFit::MarkerColor(kGray+2));
 mgg.setRange("signal1",120,130);
-signal_pdf.plotOn(frame1,RooFit::Range("total"),RooFit::Normalization(signalScale,RooAbsReal::NumEvent),RooFit::Name("Signal PDF"),RooFit::LineColor(kAzure));
+signal_pdf.plotOn(frame1,RooFit::Range("total"),RooFit::Normalization(signalScale,RooAbsReal::NumEvent),RooFit::Name("Signal PDF (Double-Sided Crystal Ball)"),RooFit::LineColor(kAzure+6));
+signal_pdf_gauss.plotOn(frame1,RooFit::Range("total"),RooFit::Normalization(signalScale1,RooAbsReal::NumEvent),RooFit::Name("Signal PDF (Gaussian)"),RooFit::LineColor(kOrange-3));
 frame1->GetXaxis()->SetTitle("m_{#gamma#gamma} (GeV)");
+frame1->GetXaxis()->SetTitleSize(0.05);
 frame1->GetYaxis()->SetTitle("Data - Background");
+frame1->GetYaxis()->SetTitleSize(0.05);
 frame1->SetTitle("");
 frame1->Draw();
 TLegend* legend1 = new TLegend(0.65, 0.75, 0.85, 0.85);
-legend1->AddEntry("Residuals", "Residuals", "P");
-legend1->AddEntry("Signal PDF", "Signal PDF", "l");
+legend1->AddEntry("Residuals", "Residuals (DCB)", "P");
+legend1->AddEntry("Residuals1", "Residuals (Gauss)", "P");
+legend1->AddEntry("Signal PDF (Double-Sided Crystal Ball)", "Signal PDF (Double-Sided Crystal Ball)", "l");
+legend1->AddEntry("Signal PDF (Gaussian)", "Signal PDF (Gaussian)", "l");
 legend1->SetBorderSize(0);
 legend1->SetFillStyle(0);
-legend1->SetX1(0.8); 
-legend1->SetY1(0.75); 
-legend1->SetX2(0.95); 
+//legend1->SetX1(0.8); 
+//legend1->SetY1(0.75); 
+//legend1->SetX2(0.95); 
+//legend1->SetY2(0.9);
+legend1->SetX1(0.65);
+legend1->SetY1(0.6);
+legend1->SetX2(0.95);
 legend1->SetY2(0.9);
 legend1->Draw();
 
