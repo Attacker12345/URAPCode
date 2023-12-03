@@ -37,7 +37,7 @@ float myy;
 //Defining histograms to store Binned Data
 TH1D *h_mSignal = new TH1D("h_Signal","Signal Data",1100,105,160);
 TH1D *h_mBackground = new TH1D("h_Background","Background Data",1100,105,160);
-TH1D *h_ggH = new TH1D("h_ggH","Gluon Fusion Production",100,105,1160);
+TH1D *h_ggH = new TH1D("h_ggH","Gluon Fusion Production",1100,105,1160);
 TH1D *h_VBF = new TH1D("h_VBF","Vector Boson Fusion Production",1100,105,160);
 TH1D *h_VH = new TH1D("h_VH","Associated Production with Vector Boson",1100,105,160);
 TH1D *h_ttH = new TH1D("h_ttH","Associated Production with Top Quarks",1100,105,160);
